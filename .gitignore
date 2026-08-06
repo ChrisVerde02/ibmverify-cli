@@ -1,0 +1,8 @@
+# compiled binary
+ibmverify
+
+# credentials — never commit these
+keys.txt
+
+# macOS
+.DS_Store
