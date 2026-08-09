@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/ChrisVerde02/ibmverify-go/client"
-	"github.com/ChrisVerde02/ibmverify-cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -50,14 +49,18 @@ func runUpload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read cert file: %w", err)
 	}
 
-	token, err := auth.GetClientCredentialsToken(ctx, uploadTenant, uploadClientID, uploadClientSecret)
+	tokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
+		TenantURL:    uploadTenant,
+		ClientID:     uploadClientID,
+		ClientSecret: uploadClientSecret,
+	})
 	if err != nil {
 		return fmt.Errorf("get access token: %w", err)
 	}
 
 	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
 		TenantURL:      uploadTenant,
-		AccessToken:    token,
+		AccessToken:    tokenResult.AccessToken,
 		CertificatePEM: string(certPEM),
 		Label:          uploadLabel,
 	}); err != nil {

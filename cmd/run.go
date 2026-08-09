@@ -7,7 +7,6 @@ import (
 
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/ChrisVerde02/ibmverify-go/crypto"
-	"github.com/ChrisVerde02/ibmverify-cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -28,19 +27,19 @@ This is the CLI equivalent of running terraform apply against examples2.`,
 }
 
 var (
-	runTenant                 string
-	runSTSClientID            string
-	runSTSClientSecret        string
-	runCertManagerClientID    string
+	runTenant                  string
+	runSTSClientID             string
+	runSTSClientSecret         string
+	runCertManagerClientID     string
 	runCertManagerClientSecret string
-	runSubject                string
-	runIssuer                 string
-	runLabel                  string
-	runOrganization           string
-	runCountry                string
-	runValidityDays           int
-	runKeySize                int
-	runSubjectTokenType       string
+	runSubject                 string
+	runIssuer                  string
+	runLabel                   string
+	runOrganization            string
+	runCountry                 string
+	runValidityDays            int
+	runKeySize                 int
+	runSubjectTokenType        string
 )
 
 func init() {
@@ -89,7 +88,11 @@ func runFlow(cmd *cobra.Command, args []string) error {
 
 	// Step 2 — obtain cert-manager client credentials token
 	fmt.Print("  Obtaining cert-manager token... ")
-	certToken, err := auth.GetClientCredentialsToken(ctx, runTenant, runCertManagerClientID, runCertManagerClientSecret)
+	certTokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
+		TenantURL:    runTenant,
+		ClientID:     runCertManagerClientID,
+		ClientSecret: runCertManagerClientSecret,
+	})
 	if err != nil {
 		return fmt.Errorf("get cert-manager token: %w", err)
 	}
@@ -99,7 +102,7 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	fmt.Print("  Uploading signer certificate... ")
 	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
 		TenantURL:      runTenant,
-		AccessToken:    certToken,
+		AccessToken:    certTokenResult.AccessToken,
 		CertificatePEM: cert.CertificatePEM,
 		Label:          runLabel,
 	}); err != nil {

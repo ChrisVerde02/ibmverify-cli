@@ -7,7 +7,6 @@ import (
 
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/ChrisVerde02/ibmverify-go/crypto"
-	"github.com/ChrisVerde02/ibmverify-cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -77,14 +76,18 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generate certificate: %w", err)
 	}
 
-	certToken, err := auth.GetClientCredentialsToken(ctx, getTenant, getCertManagerClientID, getCertManagerClientSecret)
+	certTokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
+		TenantURL:    getTenant,
+		ClientID:     getCertManagerClientID,
+		ClientSecret: getCertManagerClientSecret,
+	})
 	if err != nil {
 		return fmt.Errorf("get cert-manager token: %w", err)
 	}
 
 	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
 		TenantURL:      getTenant,
-		AccessToken:    certToken,
+		AccessToken:    certTokenResult.AccessToken,
 		CertificatePEM: cert.CertificatePEM,
 		Label:          getLabel,
 	}); err != nil {

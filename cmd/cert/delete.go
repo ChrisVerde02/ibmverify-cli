@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/ChrisVerde02/ibmverify-go/client"
-	"github.com/ChrisVerde02/ibmverify-cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 
@@ -40,12 +39,16 @@ func init() {
 func runDelete(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	token, err := auth.GetClientCredentialsToken(ctx, deleteTenant, deleteClientID, deleteClientSecret)
+	tokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
+		TenantURL:    deleteTenant,
+		ClientID:     deleteClientID,
+		ClientSecret: deleteClientSecret,
+	})
 	if err != nil {
 		return fmt.Errorf("get access token: %w", err)
 	}
 
-	if err := client.DeleteSignerCert(ctx, deleteTenant, deleteLabel, token); err != nil {
+	if err := client.DeleteSignerCert(ctx, deleteTenant, deleteLabel, tokenResult.AccessToken); err != nil {
 		return fmt.Errorf("delete signer cert: %w", err)
 	}
 
