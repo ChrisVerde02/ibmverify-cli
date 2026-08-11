@@ -1,9 +1,9 @@
 module github.com/ChrisVerde02/ibmverify-cli
 
-go 1.26.4
+go 1.23.0
 
 require (
-	github.com/ChrisVerde02/ibmverify-go v1.4.0
+	github.com/ChrisVerde02/ibmverify-go v1.4.1
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.21.0
@@ -26,5 +26,3 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
-
-replace github.com/ChrisVerde02/ibmverify-go => ../ibmverify-go

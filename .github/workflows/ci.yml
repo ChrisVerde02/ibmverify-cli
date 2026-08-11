@@ -10,14 +10,7 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout ibmverify-cli
-        uses: actions/checkout@v4
-
-      - name: Checkout ibmverify-go (sibling dir required by replace directive)
-        uses: actions/checkout@v4
-        with:
-          repository: ChrisVerde02/ibmverify-go
-          path: ../ibmverify-go
+      - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
