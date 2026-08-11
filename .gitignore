@@ -10,3 +10,5 @@ demo.sh
 
 # local secrets — never commit
 .env
+go.work
+go.work.sum
