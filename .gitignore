@@ -13,3 +13,4 @@ demo.sh
 go.work
 go.work.sum
 demo.env.example
+coverage.out
