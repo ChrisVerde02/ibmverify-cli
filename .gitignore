@@ -7,3 +7,6 @@ keys.txt
 # macOS
 .DS_Store
 demo.sh
+
+# local secrets — never commit
+.env

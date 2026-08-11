@@ -6,12 +6,13 @@ import (
 	"github.com/ChrisVerde02/ibmverify-cli/cmd/token"
 )
 
+// version is set at build time via ldflags:
+//
+//	go build -ldflags "-X main.version=v1.2.0" .
+var version = "dev"
+
 func main() {
-	// Attach the cert and token parent commands to the root.
-	// Their subcommands (get, list, delete, introspect) are registered
-	// automatically inside each file's init().
 	cmd.Root().AddCommand(cert.CertCmd)
 	cmd.Root().AddCommand(token.TokenCmd)
-
-	cmd.Execute()
+	cmd.Execute(version)
 }

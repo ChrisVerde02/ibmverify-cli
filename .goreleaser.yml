@@ -1,0 +1,43 @@
+version: 2
+
+project_name: ibmverify
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    binary: ibmverify
+    ldflags:
+      - -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: ChrisVerde02
+    name: ibmverify-cli
+  name_template: "{{.Version}}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
