@@ -12,14 +12,12 @@ jobs:
     steps:
       - name: Checkout ibmverify-cli
         uses: actions/checkout@v4
-        with:
-          path: ibmverify-cli
 
-      - name: Checkout ibmverify-go (required by replace directive)
+      - name: Checkout ibmverify-go (sibling dir required by replace directive)
         uses: actions/checkout@v4
         with:
           repository: ChrisVerde02/ibmverify-go
-          path: ibmverify-go
+          path: ../ibmverify-go
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -28,16 +26,12 @@ jobs:
 
       - name: Vet
         run: go vet ./...
-        working-directory: ibmverify-cli
 
       - name: Test
         run: go test -v -count=1 -coverprofile=coverage.out ./...
-        working-directory: ibmverify-cli
 
       - name: Coverage report
         run: go tool cover -func=coverage.out
-        working-directory: ibmverify-cli
 
       - name: Build
         run: go build -ldflags "-X main.version=${{ github.ref_name }}" -o ibmverify .
-        working-directory: ibmverify-cli
