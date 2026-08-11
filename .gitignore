@@ -12,3 +12,4 @@ demo.sh
 .env
 go.work
 go.work.sum
+demo.env.example
