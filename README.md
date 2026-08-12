@@ -72,17 +72,26 @@ export VERIFY_LABEL=DemoTokenSigner
 
 ### Option 3 — Config file
 
-Create `~/.ibmverify/config.yaml`:
+Use the built-in commands to create and fill the config file once:
 
-```yaml
-tenant: https://example.verify.ibm.com
-sts-client-id: ...
-sts-client-secret: ...
-cert-manager-client-id: ...
-cert-manager-client-secret: ...
-subject: myusername
-issuer: https://demo.ibm.com
-label: DemoTokenSigner
+```bash
+ibmverify config init                                                 # creates ~/.ibmverify/config.yaml
+ibmverify config set tenant      https://example.verify.ibm.com
+ibmverify config set sts-client-id      <sts-client-id>
+ibmverify config set sts-client-secret  <sts-client-secret>
+ibmverify config set cert-manager-client-id     <cert-manager-client-id>
+ibmverify config set cert-manager-client-secret <cert-manager-client-secret>
+ibmverify config set subject  myusername
+ibmverify config set issuer   https://demo.ibm.com
+ibmverify config set label    DemoTokenSigner
+```
+
+After that every command works with no flags at all:
+
+```bash
+./ibmverify run
+./ibmverify token get
+./ibmverify cert list
 ```
 
 **Precedence:** flag > env var > config file > default.
@@ -154,6 +163,22 @@ TOKEN=$(./ibmverify token get --subject myusername --issuer https://demo.ibm.com
 ```bash
 ./ibmverify cert delete --label DemoTokenSigner
 ```
+
+### `config init` — create the config file
+
+```bash
+./ibmverify config init
+```
+
+Creates `~/.ibmverify/config.yaml` with empty placeholders. Safe to run — will not overwrite an existing file.
+
+### `config set` — set a config value
+
+```bash
+./ibmverify config set <key> <value>
+```
+
+Valid keys: `tenant`, `sts-client-id`, `sts-client-secret`, `cert-manager-client-id`, `cert-manager-client-secret`, `subject`, `issuer`, `label`.
 
 ## Global flags
 
