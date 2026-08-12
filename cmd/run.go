@@ -66,7 +66,6 @@ func init() {
 	runCmd.Flags().IntVar(&runKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	runCmd.Flags().StringVar(&runSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
 
-	// Bind each flag to Viper so env vars / config file fill in unset flags
 	_ = viper.BindPFlag("tenant", runCmd.Flags().Lookup("tenant"))
 	_ = viper.BindPFlag("sts-client-id", runCmd.Flags().Lookup("sts-client-id"))
 	_ = viper.BindPFlag("sts-client-secret", runCmd.Flags().Lookup("sts-client-secret"))
@@ -85,7 +84,6 @@ func progress(format string, a ...any) {
 func runFlow(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Resolve values: flag > env var > config file
 	tenant := viper.GetString("tenant")
 	stsID := viper.GetString("sts-client-id")
 	stsSecret := viper.GetString("sts-client-secret")
@@ -95,16 +93,15 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	issuer := viper.GetString("issuer")
 	label := viper.GetString("label")
 
-	// Validate required values (may come from env/config, not flags)
 	if missing := requiredStrings(map[string]string{
-		"--tenant / VERIFY_TENANT":                                    tenant,
-		"--sts-client-id / VERIFY_STS_CLIENT_ID":                     stsID,
-		"--sts-client-secret / VERIFY_STS_CLIENT_SECRET":             stsSecret,
-		"--cert-manager-client-id / VERIFY_CERT_CLIENT_ID":           certID,
-		"--cert-manager-client-secret / VERIFY_CERT_CLIENT_SECRET":   certSecret,
-		"--subject / VERIFY_SUBJECT":                                  subject,
-		"--issuer / VERIFY_ISSUER":                                    issuer,
-		"--label / VERIFY_LABEL":                                      label,
+		"--tenant / VERIFY_TENANT":                                  tenant,
+		"--sts-client-id / VERIFY_STS_CLIENT_ID":                   stsID,
+		"--sts-client-secret / VERIFY_STS_CLIENT_SECRET":           stsSecret,
+		"--cert-manager-client-id / VERIFY_CERT_CLIENT_ID":         certID,
+		"--cert-manager-client-secret / VERIFY_CERT_CLIENT_SECRET": certSecret,
+		"--subject / VERIFY_SUBJECT":                                subject,
+		"--issuer / VERIFY_ISSUER":                                  issuer,
+		"--label / VERIFY_LABEL":                                    label,
 	}); missing != "" {
 		return gofmt.Errorf("missing required value(s): %s", missing)
 	}
@@ -125,28 +122,22 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	}
 	progress("✓  (CN=%s, valid %d days)\n", label, runValidityDays)
 
-	// Step 2 — obtain cert-manager client credentials token
+	// Step 2 — cert-manager client (auto-gets its own token internally)
 	progress("  Obtaining cert-manager token... ")
-	certTokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
-		TenantURL:    tenant,
-		ClientID:     certID,
-		ClientSecret: certSecret,
-	})
+	certClient, err := client.New(tenant, client.WithClientCredentials(certID, certSecret))
 	if err != nil {
-		return cliError("get cert-manager token", err)
+		return cliError("create cert client", err)
 	}
 	progress("✓\n")
 
-	// Step 3 — upload certificate to IBM Verify
+	// Step 3 — upload certificate
 	progress("  Uploading signer certificate... ")
-	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
-		TenantURL:      tenant,
-		AccessToken:    certTokenResult.AccessToken,
-		CertificatePEM: cert.CertificatePEM,
-		Label:          label,
-	}); err != nil {
+	if err := certClient.Certs.Import(ctx, label, cert.CertificatePEM); err != nil {
 		return cliError("upload signer cert", err)
 	}
+	// Small pause — IBM Verify needs a moment to index the new signer cert
+	// before it can validate JWTs signed with it.
+	time.Sleep(2 * time.Second)
 	progress("✓  (label=%s)\n", label)
 
 	// Step 4 — sign a short-lived JWT
@@ -165,15 +156,13 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	}
 	progress("✓  (kid=%s, exp=15min)\n", label)
 
-	// Step 5 — exchange JWT for IBM Verify access token
+	// Step 5 — exchange JWT for access token
 	progress("  Exchanging token... ")
-	exchanged, err := client.ExchangeToken(ctx, client.TokenExchangeRequest{
-		TenantURL:        tenant,
-		ClientID:         stsID,
-		ClientSecret:     stsSecret,
-		SubjectToken:     jwt.Token,
-		SubjectTokenType: runSubjectTokenType,
-	})
+	stsClient, err := client.New(tenant, client.WithClientCredentials(stsID, stsSecret))
+	if err != nil {
+		return cliError("create STS client", err)
+	}
+	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, runSubjectTokenType)
 	if err != nil {
 		return cliError("exchange token", err)
 	}
@@ -181,12 +170,7 @@ func runFlow(cmd *cobra.Command, args []string) error {
 
 	// Step 6 — introspect the access token
 	progress("  Introspecting token... ")
-	info, err := client.IntrospectToken(ctx, client.IntrospectionRequest{
-		TenantURL:    tenant,
-		ClientID:     stsID,
-		ClientSecret: stsSecret,
-		Token:        exchanged.AccessToken,
-	})
+	info, err := stsClient.Token.Introspect(ctx, exchanged.AccessToken)
 	if err != nil {
 		return cliError("introspect token", err)
 	}
@@ -208,12 +192,10 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	if fmt == output.JSON || fmt == output.YAML {
 		return output.Print(cmd.OutOrStdout(), fmt, result)
 	}
-	// text: just the raw token — TOKEN=$(ibmverify run ...) works
 	gofmt.Fprintln(cmd.OutOrStdout(), exchanged.AccessToken)
 	return nil
 }
 
-// outputFormat returns the validated --output flag value.
 func outputFormat() output.Format {
 	f := output.Format(GlobalOutput)
 	if !f.Valid() {
@@ -222,8 +204,6 @@ func outputFormat() output.Format {
 	return f
 }
 
-// cliError wraps an SDK error with a clean one-line message.
-// Raw HTTP bodies are only shown with --debug.
 func cliError(step string, err error) error {
 	if GlobalDebug {
 		return gofmt.Errorf("%s: %w", step, err)
@@ -260,7 +240,6 @@ func indexAfterHTTPCode(s string) int {
 	return -1
 }
 
-// requiredStrings returns a comma-separated list of keys whose values are empty.
 func requiredStrings(m map[string]string) string {
 	var missing []string
 	for k, v := range m {

@@ -40,12 +40,12 @@ func init() {
 func runIntrospect(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	info, err := client.IntrospectToken(ctx, client.IntrospectionRequest{
-		TenantURL:    introspectTenant,
-		ClientID:     introspectClientID,
-		ClientSecret: introspectClientSecret,
-		Token:        introspectToken,
-	})
+	c, err := client.New(introspectTenant, client.WithClientCredentials(introspectClientID, introspectClientSecret))
+	if err != nil {
+		return fmt.Errorf("create client: %w", err)
+	}
+
+	info, err := c.Token.Introspect(ctx, introspectToken)
 	if err != nil {
 		return fmt.Errorf("introspect token: %w", err)
 	}

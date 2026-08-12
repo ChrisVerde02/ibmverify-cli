@@ -49,21 +49,12 @@ func runUpload(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read cert file: %w", err)
 	}
 
-	tokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
-		TenantURL:    uploadTenant,
-		ClientID:     uploadClientID,
-		ClientSecret: uploadClientSecret,
-	})
+	c, err := client.New(uploadTenant, client.WithClientCredentials(uploadClientID, uploadClientSecret))
 	if err != nil {
-		return fmt.Errorf("get access token: %w", err)
+		return fmt.Errorf("create client: %w", err)
 	}
 
-	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
-		TenantURL:      uploadTenant,
-		AccessToken:    tokenResult.AccessToken,
-		CertificatePEM: string(certPEM),
-		Label:          uploadLabel,
-	}); err != nil {
+	if err := c.Certs.Import(ctx, uploadLabel, string(certPEM)); err != nil {
 		return fmt.Errorf("upload signer cert: %w", err)
 	}
 

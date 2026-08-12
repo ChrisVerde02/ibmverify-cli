@@ -51,15 +51,6 @@ func init() {
 	getCmd.Flags().IntVar(&getValidityDays, "validity-days", 365, "Certificate validity in days")
 	getCmd.Flags().IntVar(&getKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	getCmd.Flags().StringVar(&getSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
-
-	_ = getCmd.MarkFlagRequired("tenant")
-	_ = getCmd.MarkFlagRequired("sts-client-id")
-	_ = getCmd.MarkFlagRequired("sts-client-secret")
-	_ = getCmd.MarkFlagRequired("cert-manager-client-id")
-	_ = getCmd.MarkFlagRequired("cert-manager-client-secret")
-	_ = getCmd.MarkFlagRequired("subject")
-	_ = getCmd.MarkFlagRequired("issuer")
-	_ = getCmd.MarkFlagRequired("label")
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
@@ -76,23 +67,16 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("generate certificate: %w", err)
 	}
 
-	certTokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
-		TenantURL:    getTenant,
-		ClientID:     getCertManagerClientID,
-		ClientSecret: getCertManagerClientSecret,
-	})
+	// cert-manager client — auto-obtains its own token internally
+	certClient, err := client.New(getTenant, client.WithClientCredentials(getCertManagerClientID, getCertManagerClientSecret))
 	if err != nil {
-		return fmt.Errorf("get cert-manager token: %w", err)
+		return fmt.Errorf("create cert client: %w", err)
 	}
-
-	if err := client.ImportSignerCert(ctx, client.SignerCertRequest{
-		TenantURL:      getTenant,
-		AccessToken:    certTokenResult.AccessToken,
-		CertificatePEM: cert.CertificatePEM,
-		Label:          getLabel,
-	}); err != nil {
+	if err := certClient.Certs.Import(ctx, getLabel, cert.CertificatePEM); err != nil {
 		return fmt.Errorf("upload signer cert: %w", err)
 	}
+	// Small pause — IBM Verify needs a moment to index the new signer cert.
+	time.Sleep(2 * time.Second)
 
 	jwtID := fmt.Sprintf("%s-%d", getLabel, time.Now().UnixNano())
 	jwt, err := crypto.GenerateSignedJWT(crypto.JWTRequest{
@@ -107,18 +91,15 @@ func runGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("sign JWT: %w", err)
 	}
 
-	exchanged, err := client.ExchangeToken(ctx, client.TokenExchangeRequest{
-		TenantURL:        getTenant,
-		ClientID:         getSTSClientID,
-		ClientSecret:     getSTSClientSecret,
-		SubjectToken:     jwt.Token,
-		SubjectTokenType: getSubjectTokenType,
-	})
+	stsClient, err := client.New(getTenant, client.WithClientCredentials(getSTSClientID, getSTSClientSecret))
+	if err != nil {
+		return fmt.Errorf("create STS client: %w", err)
+	}
+	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, getSubjectTokenType)
 	if err != nil {
 		return fmt.Errorf("exchange token: %w", err)
 	}
 
-	// Print just the token — makes it pipeable: TOKEN=$(ibmverify token get ...)
 	fmt.Println(exchanged.AccessToken)
 	return nil
 }

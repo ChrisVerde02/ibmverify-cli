@@ -39,16 +39,12 @@ func init() {
 func runDelete(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	tokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
-		TenantURL:    deleteTenant,
-		ClientID:     deleteClientID,
-		ClientSecret: deleteClientSecret,
-	})
+	c, err := client.New(deleteTenant, client.WithClientCredentials(deleteClientID, deleteClientSecret))
 	if err != nil {
-		return fmt.Errorf("get access token: %w", err)
+		return fmt.Errorf("create client: %w", err)
 	}
 
-	if err := client.DeleteSignerCert(ctx, deleteTenant, deleteLabel, tokenResult.AccessToken); err != nil {
+	if err := c.Certs.Delete(ctx, deleteLabel); err != nil {
 		return fmt.Errorf("delete signer cert: %w", err)
 	}
 

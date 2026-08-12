@@ -39,16 +39,12 @@ func init() {
 func runGetCert(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	tokenResult, err := client.GetClientCredentialsToken(ctx, client.ClientCredentialsRequest{
-		TenantURL:    getCertTenant,
-		ClientID:     getCertClientID,
-		ClientSecret: getCertClientSecret,
-	})
+	c, err := client.New(getCertTenant, client.WithClientCredentials(getCertClientID, getCertClientSecret))
 	if err != nil {
-		return fmt.Errorf("get access token: %w", err)
+		return fmt.Errorf("create client: %w", err)
 	}
 
-	cert, err := client.GetSignerCert(ctx, getCertTenant, getCertLabel, tokenResult.AccessToken)
+	cert, err := c.Certs.Get(ctx, getCertLabel)
 	if err != nil {
 		return fmt.Errorf("get signer cert: %w", err)
 	}
