@@ -9,7 +9,7 @@ import (
 
 // version is set at build time via ldflags:
 //
-//	go build -ldflags "-X main.version=v1.2.0" .
+//	go build -ldflags "-X main.version=v1.3.0" ./cmd/ibmverify
 var version = "dev"
 
 func main() {

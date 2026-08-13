@@ -10,7 +10,7 @@ env:
   - GOWORK=off
 
 builds:
-  - main: .
+  - main: ./cmd/ibmverify
     binary: ibmverify
     ldflags:
       - -X main.version={{.Version}}

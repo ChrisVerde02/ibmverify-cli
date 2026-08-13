@@ -27,4 +27,4 @@ jobs:
         run: go tool cover -func=coverage.out
 
       - name: Build
-        run: go build -ldflags "-X main.version=${{ github.ref_name }}" -o ibmverify .
+        run: go build -ldflags "-X main.version=${{ github.ref_name }}" -o ibmverify ./cmd/ibmverify

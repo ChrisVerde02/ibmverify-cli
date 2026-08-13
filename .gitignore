@@ -1,5 +1,5 @@
 # compiled binary
-ibmverify
+/ibmverify
 
 # credentials — never commit these
 keys.txt
