@@ -6,6 +6,9 @@ before:
   hooks:
     - go mod tidy
 
+env:
+  - GOWORK=off
+
 builds:
   - main: .
     binary: ibmverify
