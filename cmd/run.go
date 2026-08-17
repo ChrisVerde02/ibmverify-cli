@@ -47,6 +47,7 @@ var (
 	runValidityDays            int
 	runKeySize                 int
 	runSubjectTokenType        string
+	runJWTExpiresIn            time.Duration
 )
 
 func init() {
@@ -65,6 +66,7 @@ func init() {
 	runCmd.Flags().IntVar(&runValidityDays, "validity-days", 365, "Certificate validity in days")
 	runCmd.Flags().IntVar(&runKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	runCmd.Flags().StringVar(&runSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
+	runCmd.Flags().DurationVar(&runJWTExpiresIn, "jwt-expires-in", 15*time.Minute, "JWT lifetime (e.g. 15m, 1h). Controls how long the signed JWT is valid before exchange.")
 
 	_ = viper.BindPFlag("tenant", runCmd.Flags().Lookup("tenant"))
 	_ = viper.BindPFlag("sts-client-id", runCmd.Flags().Lookup("sts-client-id"))
@@ -149,12 +151,12 @@ func runFlow(cmd *cobra.Command, args []string) error {
 		KeyID:         label,
 		JWTID:         jwtID,
 		PrivateKeyPEM: cert.PrivateKeyPEM,
-		ExpiresIn:     15 * time.Minute,
+		ExpiresIn:     runJWTExpiresIn,
 	})
 	if err != nil {
 		return cliError("sign JWT", err)
 	}
-	progress("✓  (kid=%s, exp=15min)\n", label)
+	progress("✓  (kid=%s, exp=%s)\n", label, runJWTExpiresIn)
 
 	// Step 5 — exchange JWT for access token
 	progress("  Exchanging token... ")

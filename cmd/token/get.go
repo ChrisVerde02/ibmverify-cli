@@ -33,6 +33,7 @@ var (
 	getValidityDays            int
 	getKeySize                 int
 	getSubjectTokenType        string
+	getJWTExpiresIn            time.Duration
 )
 
 func init() {
@@ -51,6 +52,7 @@ func init() {
 	getCmd.Flags().IntVar(&getValidityDays, "validity-days", 365, "Certificate validity in days")
 	getCmd.Flags().IntVar(&getKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	getCmd.Flags().StringVar(&getSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
+	getCmd.Flags().DurationVar(&getJWTExpiresIn, "jwt-expires-in", 15*time.Minute, "JWT lifetime (e.g. 15m, 1h). Controls how long the signed JWT is valid before exchange.")
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
@@ -85,7 +87,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 		KeyID:         getLabel,
 		JWTID:         jwtID,
 		PrivateKeyPEM: cert.PrivateKeyPEM,
-		ExpiresIn:     15 * time.Minute,
+		ExpiresIn:     getJWTExpiresIn,
 	})
 	if err != nil {
 		return fmt.Errorf("sign JWT: %w", err)
