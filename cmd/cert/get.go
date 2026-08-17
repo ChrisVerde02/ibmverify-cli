@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"errors"
+
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/spf13/cobra"
 )
@@ -45,13 +47,12 @@ func runGetCert(cmd *cobra.Command, args []string) error {
 	}
 
 	cert, err := c.Certs.Get(ctx, getCertLabel)
-	if err != nil {
-		return fmt.Errorf("get signer cert: %w", err)
-	}
-
-	if cert == nil {
+	if errors.Is(err, client.ErrNotFound) {
 		fmt.Printf("No certificate found with label %q\n", getCertLabel)
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get signer cert: %w", err)
 	}
 
 	fmt.Printf("Label:   %s\n", cert.Label)
