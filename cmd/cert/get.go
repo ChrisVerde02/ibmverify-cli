@@ -9,7 +9,7 @@ import (
 )
 
 var getCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "get",
 	Short: "Get a signer certificate from IBM Verify by label",
 	Long:  `Fetches and displays the signer certificate with the given --label.`,
 	RunE:  runGetCert,

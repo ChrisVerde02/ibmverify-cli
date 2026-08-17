@@ -10,7 +10,7 @@
 #   config init / config set
 #   cert delete (pre-clean)
 #   cert upload
-#   cert list
+#   cert get
 #   token get
 #   token introspect
 #   run  (all-in-one flow)
@@ -52,7 +52,7 @@ source .env
 BIN="./ibmverify"
 if [ ! -f "$BIN" ]; then
   note "Binary not found — building now..."
-  go build -ldflags "-X main.version=demo" -o ibmverify .
+  go build -ldflags "-X main.version=demo" -o ibmverify ./cmd/ibmverify
   ok "Built ./ibmverify"
 fi
 
@@ -122,10 +122,10 @@ rm -f "$CERT_FILE" "$KEY_FILE"
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "5 / 8  — cert list"
+header "5 / 8  — cert get"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Fetch the signer cert we just uploaded and display its metadata"
-$BIN cert list \
+$BIN cert get \
   --tenant        "$VERIFY_TENANT" \
   --client-id     "$VERIFY_CERT_CLIENT_ID" \
   --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
@@ -167,12 +167,14 @@ $BIN token introspect \
   --token         "$TOKEN"
 echo ""
 
-# Clean up again before the all-in-one run
+# Clean up again before the all-in-one run — must delete so run doesn't
+# hit HTTP 400 "label already exists" from the token get step above
 $BIN cert delete \
   --tenant        "$VERIFY_TENANT" \
   --client-id     "$VERIFY_CERT_CLIENT_ID" \
   --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
   --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
+sleep 1
 
 # ══════════════════════════════════════════════════════════════════════════════
 header "8 / 8  — run  (all-in-one)"
