@@ -8,6 +8,8 @@ import (
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/ChrisVerde02/ibmverify-go/crypto"
 	"github.com/spf13/cobra"
+
+	"github.com/ChrisVerde02/ibmverify-cli/internal/retry"
 )
 
 var getCmd = &cobra.Command{
@@ -74,7 +76,9 @@ func runGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create cert client: %w", err)
 	}
-	if err := certClient.Certs.Import(ctx, getLabel, cert.CertificatePEM); err != nil {
+	if err := retry.Do(ctx, func() error {
+		return certClient.Certs.Import(ctx, getLabel, cert.CertificatePEM)
+	}); err != nil {
 		return fmt.Errorf("upload signer cert: %w", err)
 	}
 	// Small pause — IBM Verify needs a moment to index the new signer cert.
@@ -97,11 +101,15 @@ func runGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create STS client: %w", err)
 	}
-	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, getSubjectTokenType)
-	if err != nil {
+	var exchanged *client.ExchangeResult
+	if err := retry.Do(ctx, func() error {
+		var e error
+		exchanged, e = stsClient.Token.Exchange(ctx, jwt.Token, getSubjectTokenType)
+		return e
+	}); err != nil {
 		return fmt.Errorf("exchange token: %w", err)
 	}
 
-	fmt.Println(exchanged.AccessToken)
+	fmt.Fprintln(cmd.OutOrStdout(), exchanged.AccessToken)
 	return nil
 }

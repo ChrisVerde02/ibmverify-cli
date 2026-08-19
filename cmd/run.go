@@ -14,6 +14,7 @@ import (
 	"github.com/ChrisVerde02/ibmverify-cli/internal/errkind"
 	"github.com/ChrisVerde02/ibmverify-cli/internal/exitcode"
 	"github.com/ChrisVerde02/ibmverify-cli/internal/output"
+	"github.com/ChrisVerde02/ibmverify-cli/internal/retry"
 )
 
 var runCmd = &cobra.Command{
@@ -134,7 +135,9 @@ func runFlow(cmd *cobra.Command, args []string) error {
 
 	// Step 3 — upload certificate
 	progress("  Uploading signer certificate... ")
-	if err := certClient.Certs.Import(ctx, label, cert.CertificatePEM); err != nil {
+	if err := retry.Do(ctx, func() error {
+		return certClient.Certs.Import(ctx, label, cert.CertificatePEM)
+	}); err != nil {
 		return cliError("upload signer cert", err)
 	}
 	// Small pause — IBM Verify needs a moment to index the new signer cert
@@ -164,8 +167,12 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return cliError("create STS client", err)
 	}
-	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, runSubjectTokenType)
-	if err != nil {
+	var exchanged *client.ExchangeResult
+	if err := retry.Do(ctx, func() error {
+		var e error
+		exchanged, e = stsClient.Token.Exchange(ctx, jwt.Token, runSubjectTokenType)
+		return e
+	}); err != nil {
 		return cliError("exchange token", err)
 	}
 	progress("✓  (expires in %ds)\n", exchanged.ExpiresIn)
