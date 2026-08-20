@@ -14,6 +14,7 @@ import (
 	"github.com/ChrisVerde02/ibmverify-cli/internal/errkind"
 	"github.com/ChrisVerde02/ibmverify-cli/internal/exitcode"
 	"github.com/ChrisVerde02/ibmverify-cli/internal/output"
+	"github.com/ChrisVerde02/ibmverify-cli/internal/retry"
 )
 
 var runCmd = &cobra.Command{
@@ -47,6 +48,7 @@ var (
 	runValidityDays            int
 	runKeySize                 int
 	runSubjectTokenType        string
+	runJWTExpiresIn            time.Duration
 )
 
 func init() {
@@ -65,6 +67,7 @@ func init() {
 	runCmd.Flags().IntVar(&runValidityDays, "validity-days", 365, "Certificate validity in days")
 	runCmd.Flags().IntVar(&runKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	runCmd.Flags().StringVar(&runSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
+	runCmd.Flags().DurationVar(&runJWTExpiresIn, "jwt-expires-in", 15*time.Minute, "JWT lifetime (e.g. 15m, 1h). Controls how long the signed JWT is valid before exchange.")
 
 	_ = viper.BindPFlag("tenant", runCmd.Flags().Lookup("tenant"))
 	_ = viper.BindPFlag("sts-client-id", runCmd.Flags().Lookup("sts-client-id"))
@@ -132,7 +135,9 @@ func runFlow(cmd *cobra.Command, args []string) error {
 
 	// Step 3 — upload certificate
 	progress("  Uploading signer certificate... ")
-	if err := certClient.Certs.Import(ctx, label, cert.CertificatePEM); err != nil {
+	if err := retry.Do(ctx, func() error {
+		return certClient.Certs.Import(ctx, label, cert.CertificatePEM)
+	}); err != nil {
 		return cliError("upload signer cert", err)
 	}
 	// Small pause — IBM Verify needs a moment to index the new signer cert
@@ -149,12 +154,12 @@ func runFlow(cmd *cobra.Command, args []string) error {
 		KeyID:         label,
 		JWTID:         jwtID,
 		PrivateKeyPEM: cert.PrivateKeyPEM,
-		ExpiresIn:     15 * time.Minute,
+		ExpiresIn:     runJWTExpiresIn,
 	})
 	if err != nil {
 		return cliError("sign JWT", err)
 	}
-	progress("✓  (kid=%s, exp=15min)\n", label)
+	progress("✓  (kid=%s, exp=%s)\n", label, runJWTExpiresIn)
 
 	// Step 5 — exchange JWT for access token
 	progress("  Exchanging token... ")
@@ -162,8 +167,12 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return cliError("create STS client", err)
 	}
-	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, runSubjectTokenType)
-	if err != nil {
+	var exchanged *client.ExchangeResult
+	if err := retry.Do(ctx, func() error {
+		var e error
+		exchanged, e = stsClient.Token.Exchange(ctx, jwt.Token, runSubjectTokenType)
+		return e
+	}); err != nil {
 		return cliError("exchange token", err)
 	}
 	progress("✓  (expires in %ds)\n", exchanged.ExpiresIn)

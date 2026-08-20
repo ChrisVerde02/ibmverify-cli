@@ -3,7 +3,7 @@ module github.com/ChrisVerde02/ibmverify-cli
 go 1.23.0
 
 require (
-	github.com/ChrisVerde02/ibmverify-go v1.5.1
+	github.com/ChrisVerde02/ibmverify-go v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.21.0

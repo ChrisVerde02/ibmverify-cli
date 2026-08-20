@@ -1,42 +1,38 @@
-// Package errkind maps SDK error messages to structured exit codes.
+// Package errkind maps SDK errors to structured exit codes.
 package errkind
 
 import (
-	"strings"
+	"errors"
+
+	"github.com/ChrisVerde02/ibmverify-go/client"
 
 	"github.com/ChrisVerde02/ibmverify-cli/internal/exitcode"
 )
 
 // ExitCode inspects an error returned by the SDK and returns the appropriate
-// exit code. It works by scanning the error string for known HTTP status
-// phrases since the SDK embeds the status code in the message.
+// exit code. It first checks for a typed *client.APIError (preferred), then
+// falls back to string-scanning for errors not produced by the SDK.
 func ExitCode(err error) int {
 	if err == nil {
 		return exitcode.OK
 	}
-	msg := err.Error()
-	switch {
-	case contains(msg, "HTTP 401", "HTTP 403", "invalid_client", "unauthorized"):
-		return exitcode.Auth
-	case contains(msg, "HTTP 404", "not found"):
-		return exitcode.NotFound
-	case contains(msg, "HTTP 429", "rate"):
-		return exitcode.RateLimit
-	case contains(msg, "HTTP 5"):
-		return exitcode.Server
-	case contains(msg, "cannot be empty", "invalid"):
-		return exitcode.Validation
-	default:
-		return exitcode.Other
-	}
-}
 
-func contains(s string, subs ...string) bool {
-	lower := strings.ToLower(s)
-	for _, sub := range subs {
-		if strings.Contains(lower, strings.ToLower(sub)) {
-			return true
+	var apiErr *client.APIError
+	if errors.As(err, &apiErr) {
+		switch {
+		case apiErr.IsAuth():
+			return exitcode.Auth
+		case apiErr.IsNotFound():
+			return exitcode.NotFound
+		case apiErr.IsRateLimit():
+			return exitcode.RateLimit
+		case apiErr.IsServer():
+			return exitcode.Server
+		default:
+			return exitcode.Other
 		}
 	}
-	return false
+
+	// Fallback: plain errors (flag validation, file I/O, etc.)
+	return exitcode.Other
 }

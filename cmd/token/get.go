@@ -8,6 +8,8 @@ import (
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/ChrisVerde02/ibmverify-go/crypto"
 	"github.com/spf13/cobra"
+
+	"github.com/ChrisVerde02/ibmverify-cli/internal/retry"
 )
 
 var getCmd = &cobra.Command{
@@ -33,6 +35,7 @@ var (
 	getValidityDays            int
 	getKeySize                 int
 	getSubjectTokenType        string
+	getJWTExpiresIn            time.Duration
 )
 
 func init() {
@@ -51,6 +54,7 @@ func init() {
 	getCmd.Flags().IntVar(&getValidityDays, "validity-days", 365, "Certificate validity in days")
 	getCmd.Flags().IntVar(&getKeySize, "key-size", 4096, "RSA key size (2048, 3072, or 4096)")
 	getCmd.Flags().StringVar(&getSubjectTokenType, "subject-token-type", "urn:demo:token-type:user-jwt", "Subject token type URN")
+	getCmd.Flags().DurationVar(&getJWTExpiresIn, "jwt-expires-in", 15*time.Minute, "JWT lifetime (e.g. 15m, 1h). Controls how long the signed JWT is valid before exchange.")
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
@@ -72,7 +76,9 @@ func runGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create cert client: %w", err)
 	}
-	if err := certClient.Certs.Import(ctx, getLabel, cert.CertificatePEM); err != nil {
+	if err := retry.Do(ctx, func() error {
+		return certClient.Certs.Import(ctx, getLabel, cert.CertificatePEM)
+	}); err != nil {
 		return fmt.Errorf("upload signer cert: %w", err)
 	}
 	// Small pause — IBM Verify needs a moment to index the new signer cert.
@@ -85,7 +91,7 @@ func runGet(cmd *cobra.Command, args []string) error {
 		KeyID:         getLabel,
 		JWTID:         jwtID,
 		PrivateKeyPEM: cert.PrivateKeyPEM,
-		ExpiresIn:     15 * time.Minute,
+		ExpiresIn:     getJWTExpiresIn,
 	})
 	if err != nil {
 		return fmt.Errorf("sign JWT: %w", err)
@@ -95,11 +101,15 @@ func runGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create STS client: %w", err)
 	}
-	exchanged, err := stsClient.Token.Exchange(ctx, jwt.Token, getSubjectTokenType)
-	if err != nil {
+	var exchanged *client.ExchangeResult
+	if err := retry.Do(ctx, func() error {
+		var e error
+		exchanged, e = stsClient.Token.Exchange(ctx, jwt.Token, getSubjectTokenType)
+		return e
+	}); err != nil {
 		return fmt.Errorf("exchange token: %w", err)
 	}
 
-	fmt.Println(exchanged.AccessToken)
+	fmt.Fprintln(cmd.OutOrStdout(), exchanged.AccessToken)
 	return nil
 }
