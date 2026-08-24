@@ -1,5 +1,5 @@
-github.com/ChrisVerde02/ibmverify-go v1.6.0 h1:uPjyOyg9xB+uQsW4hujIvZmj7x/+L7mQf6FLlLLOyB0=
-github.com/ChrisVerde02/ibmverify-go v1.6.0/go.mod h1:gG3C0FdI/JYG8E4IqOc5n4nZZPtSPqb4ImURVl+l8dQ=
+github.com/ChrisVerde02/ibmverify-go v1.6.1 h1:5bGnqxwCH0kOFqmoyq9ygo7PZ9MTkUN8SS1biE76yYM=
+github.com/ChrisVerde02/ibmverify-go v1.6.1/go.mod h1:gG3C0FdI/JYG8E4IqOc5n4nZZPtSPqb4ImURVl+l8dQ=
 github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
