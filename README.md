@@ -1,6 +1,6 @@
 # ibmverify-cli
 
-Command-line tool for [IBM Verify](https://www.ibm.com/products/verify-identity). Perform the full JWT token-exchange flow, manage signer certificates, and introspect access tokens — all from the terminal.
+Command-line tool for [IBM Verify](https://www.ibm.com/products/verify-identity). Manage applications, users, signer certificates, and access tokens — all from the terminal.
 
 Built on top of [`ibmverify-go`](https://github.com/ChrisVerde02/ibmverify-go).
 
@@ -15,7 +15,7 @@ Or clone and build:
 ```bash
 git clone https://github.com/ChrisVerde02/ibmverify-cli
 cd ibmverify-cli
-go build -o ibmverify .
+go build -o ibmverify ./cmd/ibmverify
 ```
 
 ## Quick start
@@ -24,16 +24,22 @@ go build -o ibmverify .
 # 1. Check version
 ./ibmverify --version
 
-# 2. Run the full flow (credentials via flags)
+# 2. Run the full token-exchange flow
 ./ibmverify run \
-  --tenant               https://example.verify.ibm.com \
-  --sts-client-id        <sts-client-id> \
-  --sts-client-secret    <sts-client-secret> \
+  --tenant                     https://example.verify.ibm.com \
+  --sts-client-id              <sts-client-id> \
+  --sts-client-secret          <sts-client-secret> \
   --cert-manager-client-id     <cert-manager-client-id> \
   --cert-manager-client-secret <cert-manager-client-secret> \
   --subject   myusername \
   --issuer    https://demo.ibm.com \
   --label     DemoTokenSigner
+
+# 3. List applications
+./ibmverify app list \
+  --tenant      https://example.verify.ibm.com \
+  --client-id   <client-id> \
+  --client-secret <client-secret>
 ```
 
 Progress is printed to stderr. Stdout is the access token only — so this works:
@@ -76,11 +82,11 @@ Use the built-in commands to create and fill the config file once:
 
 ```bash
 ibmverify config init                                                 # creates ~/.ibmverify/config.yaml
-ibmverify config set tenant      https://example.verify.ibm.com
-ibmverify config set sts-client-id      <sts-client-id>
-ibmverify config set sts-client-secret  <sts-client-secret>
-ibmverify config set cert-manager-client-id     <cert-manager-client-id>
-ibmverify config set cert-manager-client-secret <cert-manager-client-secret>
+ibmverify config set tenant                      https://example.verify.ibm.com
+ibmverify config set sts-client-id               <sts-client-id>
+ibmverify config set sts-client-secret           <sts-client-secret>
+ibmverify config set cert-manager-client-id      <cert-manager-client-id>
+ibmverify config set cert-manager-client-secret  <cert-manager-client-secret>
 ibmverify config set subject  myusername
 ibmverify config set issuer   https://demo.ibm.com
 ibmverify config set label    DemoTokenSigner
@@ -91,7 +97,7 @@ After that every command works with no flags at all:
 ```bash
 ./ibmverify run
 ./ibmverify token get
-./ibmverify cert list
+./ibmverify cert get --label DemoTokenSigner
 ```
 
 **Precedence:** flag > env var > config file > default.
@@ -106,7 +112,7 @@ cp demo.env.example .env
 # edit .env with your real values
 
 # 2. Build and run
-go build -o ibmverify .
+go build -o ibmverify ./cmd/ibmverify
 chmod +x demo.sh
 ./demo.sh
 ```
@@ -122,7 +128,53 @@ The script runs four steps in order:
 
 ## Commands
 
-### `run` — full flow in one command
+### `app` — manage IBM Verify applications
+
+#### `app list` — list all applications
+
+```bash
+./ibmverify app list \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret>
+```
+
+#### `app get` — get an application by ID
+
+```bash
+./ibmverify app get \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret> \
+  --id            <application-id>
+```
+
+#### `app create` — create an application
+
+```bash
+./ibmverify app create \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret> \
+  --name          "My Application" \
+  --template-id   <template-id>
+```
+
+#### `app delete` — delete an application
+
+```bash
+./ibmverify app delete \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret> \
+  --id            <application-id>
+```
+
+All `app` commands support `--output json|yaml|text`.
+
+---
+
+### `run` — full token-exchange flow in one command
 
 Generates a certificate, uploads it, signs a JWT, exchanges it for a token, and introspects it. Progress goes to stderr; the access token goes to stdout.
 
@@ -130,9 +182,13 @@ Generates a certificate, uploads it, signs a JWT, exchanges it for a token, and 
 ./ibmverify run --subject myusername --issuer https://demo.ibm.com --label DemoTokenSigner
 ```
 
-Optional flags: `--organization` (default `IBM`), `--country` (default `US`), `--validity-days` (default `365`), `--key-size` (default `4096`), `--subject-token-type`.
+Optional flags: `--organization` (default `IBM`), `--country` (default `US`), `--validity-days` (default `365`), `--key-size` (default `4096`), `--jwt-expires-in` (default `300`), `--subject-token-type`.
 
-### `token get` — JWT token exchange (pipeable)
+---
+
+### `token` — OAuth token operations
+
+#### `token get` — JWT token exchange (pipeable)
 
 Same flow as `run` but prints only the raw token to stdout.
 
@@ -140,31 +196,41 @@ Same flow as `run` but prints only the raw token to stdout.
 TOKEN=$(./ibmverify token get --subject myusername --issuer https://demo.ibm.com --label DemoTokenSigner)
 ```
 
-### `token introspect` — inspect a token
+Optional: `--jwt-expires-in <seconds>` to control how long the signed JWT is valid before exchange.
+
+#### `token introspect` — inspect an access token
 
 ```bash
 ./ibmverify token introspect --token <access-token>
 ```
 
-### `cert upload` — upload a signer certificate
+---
+
+### `cert` — manage signer certificates
+
+#### `cert upload` — upload a signer certificate
 
 ```bash
 ./ibmverify cert upload --cert-file ./cert.pem --label DemoTokenSigner
 ```
 
-### `cert list` — get a signer certificate by label
+#### `cert get` — fetch a signer certificate by label
 
 ```bash
-./ibmverify cert list --label DemoTokenSigner
+./ibmverify cert get --label DemoTokenSigner
 ```
 
-### `cert delete` — delete a signer certificate
+#### `cert delete` — delete a signer certificate
 
 ```bash
 ./ibmverify cert delete --label DemoTokenSigner
 ```
 
-### `config init` — create the config file
+---
+
+### `config` — manage the config file
+
+#### `config init` — create the config file
 
 ```bash
 ./ibmverify config init
@@ -172,13 +238,21 @@ TOKEN=$(./ibmverify token get --subject myusername --issuer https://demo.ibm.com
 
 Creates `~/.ibmverify/config.yaml` with empty placeholders. Safe to run — will not overwrite an existing file.
 
-### `config set` — set a config value
+#### `config get` — display current config
+
+```bash
+./ibmverify config get
+```
+
+#### `config set` — set a config value
 
 ```bash
 ./ibmverify config set <key> <value>
 ```
 
 Valid keys: `tenant`, `sts-client-id`, `sts-client-secret`, `cert-manager-client-id`, `cert-manager-client-secret`, `subject`, `issuer`, `label`.
+
+---
 
 ## Global flags
 
@@ -189,7 +263,10 @@ Valid keys: `tenant`, `sts-client-id`, `sts-client-secret`, `cert-manager-client
 | `--version` | Print the CLI version |
 
 ```bash
-# Get token as JSON — pipe into jq
+# List applications as JSON — pipe into jq
+./ibmverify app list --tenant ... --client-id ... --client-secret ... -o json | jq '.[].name'
+
+# Get token as JSON
 ./ibmverify token get -o json | jq .access_token
 ```
 
@@ -208,12 +285,14 @@ Valid keys: `tenant`, `sts-client-id`, `sts-client-secret`, `cert-manager-client
 
 ## IBM Verify setup
 
-Two API clients are required in your IBM Verify tenant:
+Two API clients are required in your IBM Verify tenant for the token-exchange flow:
 
 | Client | Required entitlement | Used for |
 |---|---|---|
 | STS client | Token exchange | Exchanging a JWT for an access token, introspection |
 | Cert-manager client | `manageCerts` | Uploading and deleting signer certificates |
+
+Application management (`app` commands) requires an API client with application management entitlements.
 
 ## Development
 
@@ -228,7 +307,7 @@ go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
 go vet ./...
 
 # Build with version
-go build -ldflags "-X main.version=v1.2.0" -o ibmverify .
+go build -ldflags "-X main.version=v1.4.0" -o ibmverify ./cmd/ibmverify
 ```
 
 ## Requirements
