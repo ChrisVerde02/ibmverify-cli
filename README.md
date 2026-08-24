@@ -174,6 +174,37 @@ All `app` commands support `--output json|yaml|text`.
 
 ---
 
+### `user` — manage IBM Verify users (SCIM v2)
+
+#### `user list` — list all users
+
+```bash
+./ibmverify user list \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret>
+```
+
+Optional: `--filter` for a SCIM filter expression:
+
+```bash
+./ibmverify user list --tenant ... --client-id ... --client-secret ... --filter 'userName eq "john"'
+```
+
+#### `user get` — get a user by ID
+
+```bash
+./ibmverify user get \
+  --tenant        https://example.verify.ibm.com \
+  --client-id     <client-id> \
+  --client-secret <client-secret> \
+  --id            <user-id>
+```
+
+All `user` commands support `--output json|yaml|text`.
+
+---
+
 ### `run` — full token-exchange flow in one command
 
 Generates a certificate, uploads it, signs a JWT, exchanges it for a token, and introspects it. Progress goes to stderr; the access token goes to stdout.
