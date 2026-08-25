@@ -240,3 +240,78 @@ func TestUserGet_notFound(t *testing.T) {
 		t.Fatal("expected error for not-found user, got nil")
 	}
 }
+
+func TestUserCreate_text(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/endpoint/default/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v2.0/Users", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/scim+json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":          "user-new",
+			"userName":    "newuser",
+			"displayName": "New User",
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	createTenant, createClientID, createClientSecret = srv.URL, "cid", "csec"
+	createUserName, createPassword, createDisplayName = "newuser", "pass123", "New User"
+	var buf bytes.Buffer
+	createCmd.SetOut(&buf)
+
+	if err := runCreateUser(createCmd, nil); err != nil {
+		t.Fatalf("runCreateUser: %v", err)
+	}
+	if !strings.Contains(buf.String(), "created") {
+		t.Errorf("expected 'created' in output, got: %s", buf.String())
+	}
+}
+
+func TestUserDelete_ok(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/endpoint/default/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v2.0/Users/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	deleteTenant, deleteClientID, deleteClientSecret, deleteUserID = srv.URL, "cid", "csec", "user-abc"
+	var buf bytes.Buffer
+	deleteCmd.SetOut(&buf)
+
+	if err := runDeleteUser(deleteCmd, nil); err != nil {
+		t.Fatalf("runDeleteUser: %v", err)
+	}
+	if !strings.Contains(buf.String(), "deleted") {
+		t.Errorf("expected 'deleted' in output, got: %s", buf.String())
+	}
+}
+
+func TestUserDelete_notFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/endpoint/default/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "tok", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v2.0/Users/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "404", "detail": "not found"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	deleteTenant, deleteClientID, deleteClientSecret, deleteUserID = srv.URL, "cid", "csec", "no-such-user"
+
+	if err := runDeleteUser(deleteCmd, nil); err == nil {
+		t.Fatal("expected error for not-found user, got nil")
+	}
+}
