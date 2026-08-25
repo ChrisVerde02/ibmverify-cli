@@ -11,9 +11,10 @@
 #   cert delete (pre-clean)
 #   cert upload
 #   cert get
-#   token get
+#   token get  (with --jwt-expires-in, --validity-days, --key-size)
 #   token introspect
-#   run  (all-in-one flow)
+#   run  (default expiration)
+#   run  (custom expiration flags — shows all new options)
 
 set -e  # stop on first error
 
@@ -48,6 +49,12 @@ source .env
 : "${VERIFY_ISSUER:?          Missing VERIFY_ISSUER in .env}"
 : "${VERIFY_LABEL:?           Missing VERIFY_LABEL in .env}"
 
+# ── Optional expiration / cert overrides (have safe defaults) ──────────────────
+JWT_EXPIRES_IN="${VERIFY_JWT_EXPIRES_IN:-15m}"
+VALIDITY_DAYS="${VERIFY_VALIDITY_DAYS:-365}"
+KEY_SIZE="${VERIFY_KEY_SIZE:-4096}"
+SUBJECT_TOKEN_TYPE="${VERIFY_SUBJECT_TOKEN_TYPE:-urn:demo:token-type:user-jwt}"
+
 # ── Build binary if not present ────────────────────────────────────────────────
 BIN="./ibmverify"
 if [ ! -f "$BIN" ]; then
@@ -66,14 +73,14 @@ echo -e "${BOLD}  Tenant: $VERIFY_TENANT                         ${RESET}"
 echo -e "${BOLD}══════════════════════════════════════════════════${RESET}"
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "1 / 8  — config init"
+header "1 / 9  — config init"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Create ~/.ibmverify/config.yaml (skips if already exists)"
 $BIN config init
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "2 / 8  — config set"
+header "2 / 9  — config set"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Write tenant, subject, issuer, label into the config file"
 $BIN config set tenant  "$VERIFY_TENANT"
@@ -85,7 +92,7 @@ note "Precedence: flag > env var > config file > default"
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "3 / 8  — cert delete  (pre-clean)"
+header "3 / 9  — cert delete  (pre-clean)"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Remove any existing signer cert with label '$VERIFY_LABEL'"
 $BIN cert delete \
@@ -98,7 +105,7 @@ $BIN cert delete \
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "4 / 8  — cert upload"
+header "4 / 9  — cert upload"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Generate a temporary self-signed cert and upload it to IBM Verify"
 CERT_FILE=$(mktemp /tmp/ibmverify-demo-XXXX.pem)
@@ -122,7 +129,7 @@ rm -f "$CERT_FILE" "$KEY_FILE"
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "5 / 8  — cert get"
+header "5 / 9  — cert get"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Fetch the signer cert we just uploaded and display its metadata"
 $BIN cert get \
@@ -140,24 +147,29 @@ $BIN cert delete \
   --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "6 / 8  — token get"
+header "6 / 9  — token get"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Full cert→JWT→exchange flow — capture access token on stdout"
+note "Using: --jwt-expires-in $JWT_EXPIRES_IN  --validity-days $VALIDITY_DAYS  --key-size $KEY_SIZE"
 TOKEN=$($BIN token get \
   --tenant                     "$VERIFY_TENANT" \
   --sts-client-id              "$VERIFY_STS_CLIENT_ID" \
   --sts-client-secret          "$VERIFY_STS_CLIENT_SECRET" \
   --cert-manager-client-id     "$VERIFY_CERT_CLIENT_ID" \
   --cert-manager-client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --subject "$VERIFY_SUBJECT" \
-  --issuer  "$VERIFY_ISSUER" \
-  --label   "$VERIFY_LABEL")
+  --subject                    "$VERIFY_SUBJECT" \
+  --issuer                     "$VERIFY_ISSUER" \
+  --label                      "$VERIFY_LABEL" \
+  --jwt-expires-in             "$JWT_EXPIRES_IN" \
+  --validity-days              "$VALIDITY_DAYS" \
+  --key-size                   "$KEY_SIZE" \
+  --subject-token-type         "$SUBJECT_TOKEN_TYPE")
 
 ok "Token captured — first 60 chars: ${TOKEN:0:60}..."
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "7 / 8  — token introspect"
+header "7 / 9  — token introspect"
 # ══════════════════════════════════════════════════════════════════════════════
 step "Inspect the token we just received"
 $BIN token introspect \
@@ -167,7 +179,7 @@ $BIN token introspect \
   --token         "$TOKEN"
 echo ""
 
-# Clean up again before the all-in-one run — must delete so run doesn't
+# Clean up before all-in-one run — must delete so run doesn't
 # hit HTTP 400 "label already exists" from the token get step above
 $BIN cert delete \
   --tenant        "$VERIFY_TENANT" \
@@ -177,7 +189,7 @@ $BIN cert delete \
 sleep 1
 
 # ══════════════════════════════════════════════════════════════════════════════
-header "8 / 8  — run  (all-in-one)"
+header "8 / 9  — run  (default expiration)"
 # ══════════════════════════════════════════════════════════════════════════════
 step "ibmverify run — generates cert, uploads, signs JWT, exchanges, introspects"
 note "Progress goes to stderr — stdout is the clean token (TOKEN=\$(ibmverify run ...) works)"
@@ -194,15 +206,48 @@ FULL_TOKEN=$($BIN run \
 ok "Token captured cleanly from stdout"
 echo ""
 
+# Clean up before custom-expiration run
+$BIN cert delete \
+  --tenant        "$VERIFY_TENANT" \
+  --client-id     "$VERIFY_CERT_CLIENT_ID" \
+  --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
+  --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
+sleep 1
+
+# ══════════════════════════════════════════════════════════════════════════════
+header "9 / 9  — run  (custom expiration + cert options)"
+# ══════════════════════════════════════════════════════════════════════════════
+step "Same flow with explicit --jwt-expires-in, --validity-days, --key-size overrides"
+note "--jwt-expires-in  controls how long the signed JWT lives before exchange"
+note "--validity-days   controls the cert's X.509 validity window"
+note "--key-size        RSA key strength: 2048 (fast) | 3072 | 4096 (default)"
+note "--subject-token-type  URN sent in the token-exchange grant"
+CUSTOM_TOKEN=$($BIN run \
+  --tenant                     "$VERIFY_TENANT" \
+  --sts-client-id              "$VERIFY_STS_CLIENT_ID" \
+  --sts-client-secret          "$VERIFY_STS_CLIENT_SECRET" \
+  --cert-manager-client-id     "$VERIFY_CERT_CLIENT_ID" \
+  --cert-manager-client-secret "$VERIFY_CERT_CLIENT_SECRET" \
+  --subject            "$VERIFY_SUBJECT" \
+  --issuer             "$VERIFY_ISSUER" \
+  --label              "$VERIFY_LABEL" \
+  --jwt-expires-in     "$JWT_EXPIRES_IN" \
+  --validity-days      "$VALIDITY_DAYS" \
+  --key-size           "$KEY_SIZE" \
+  --subject-token-type "$SUBJECT_TOKEN_TYPE")
+
+ok "Custom-expiration token captured — first 60 chars: ${CUSTOM_TOKEN:0:60}..."
+echo ""
+
 # ── Final output ───────────────────────────────────────────────────────────────
 echo -e "${BOLD}══════════════════════════════════════════════════${RESET}"
 echo -e "${BOLD}  Full access token (use in curl / Postman):      ${RESET}"
 echo -e "${BOLD}══════════════════════════════════════════════════${RESET}"
 echo ""
-echo "$FULL_TOKEN"
+echo "$CUSTOM_TOKEN"
 echo ""
 echo -e "${YELLOW}Example curl:${RESET}"
-echo "  curl -s -H \"Authorization: Bearer \$FULL_TOKEN\" \\"
+echo "  curl -s -H \"Authorization: Bearer \$CUSTOM_TOKEN\" \\"
 echo "    $VERIFY_TENANT/v2.0/me"
 echo ""
-ok "Demo complete — all 8 commands exercised"
+ok "Demo complete — all 9 sections exercised"

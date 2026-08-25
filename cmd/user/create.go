@@ -69,7 +69,8 @@ func runCreateUser(c *cobra.Command, args []string) error {
 	case output.JSON, output.YAML:
 		return output.Print(c.OutOrStdout(), cmd.GlobalOutput, result)
 	default:
-		fmt.Fprintf(c.OutOrStdout(), "✓ User created (userName=%s)\n", createUserName)
+		id, _ := result["id"].(string)
+		fmt.Fprintf(c.OutOrStdout(), "✓ User created (userName=%s, id=%s)\n", createUserName, id)
 	}
 	return nil
 }
