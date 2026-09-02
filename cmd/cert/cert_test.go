@@ -89,8 +89,8 @@ func TestCertGet_notFound(t *testing.T) {
 	getCertClientSecret = "cm-secret"
 	getCertLabel = "missing"
 
-	if err := runGetCert(getCmd, nil); err != nil {
-		t.Fatalf("expected nil error for not-found, got: %v", err)
+	if err := runGetCert(getCmd, nil); err == nil {
+		t.Fatal("expected error for not-found, got nil")
 	}
 }
 

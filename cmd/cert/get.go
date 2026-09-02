@@ -2,9 +2,10 @@ package cert
 
 import (
 	"context"
-	"fmt"
-
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
 
 	"github.com/ChrisVerde02/ibmverify-go/client"
 	"github.com/spf13/cobra"
@@ -48,16 +49,33 @@ func runGetCert(cmd *cobra.Command, args []string) error {
 
 	cert, err := c.Certs.Get(ctx, getCertLabel)
 	if errors.Is(err, client.ErrNotFound) {
-		fmt.Printf("No certificate found with label %q\n", getCertLabel)
-		return nil
+		return fmt.Errorf("get signer cert: %w", err)
 	}
 	if err != nil {
 		return fmt.Errorf("get signer cert: %w", err)
 	}
 
-	fmt.Printf("Label:   %s\n", cert.Label)
-	fmt.Printf("Subject: %s\n", cert.Subject)
-	fmt.Printf("Issuer:  %s\n", cert.Issuer)
+	// IBM Verify only returns the cert body — label is from our request;
+	// subject/issuer are parsed from the PEM.
+	subject, issuer := parseCertDN(cert.Cert)
+
+	fmt.Printf("Label:   %s\n", getCertLabel)
+	fmt.Printf("Subject: %s\n", subject)
+	fmt.Printf("Issuer:  %s\n", issuer)
 	fmt.Printf("Cert:\n%s\n", cert.Cert)
 	return nil
+}
+
+// parseCertDN extracts Subject and Issuer DN strings from a PEM certificate.
+// Returns empty strings if the PEM cannot be parsed.
+func parseCertDN(pemData string) (subject, issuer string) {
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return "", ""
+	}
+	parsed, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", ""
+	}
+	return parsed.Subject.String(), parsed.Issuer.String()
 }

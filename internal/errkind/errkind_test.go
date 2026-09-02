@@ -26,7 +26,7 @@ func TestExitCode(t *testing.T) {
 		{"wrapped 401", fmt.Errorf("op: %w", &client.APIError{StatusCode: 401}), exitcode.Auth},
 		{"wrapped 404", fmt.Errorf("op: %w", &client.APIError{StatusCode: 404}), exitcode.NotFound},
 		{"plain error", errors.New("something went wrong"), exitcode.Other},
-		{"ErrNotFound sentinel", client.ErrNotFound, exitcode.Other}, // sentinel is not *APIError
+		{"ErrNotFound sentinel", client.ErrNotFound, exitcode.NotFound},
 	}
 
 	for _, tt := range tests {

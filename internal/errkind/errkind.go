@@ -17,6 +17,10 @@ func ExitCode(err error) int {
 		return exitcode.OK
 	}
 
+	if errors.Is(err, client.ErrNotFound) {
+		return exitcode.NotFound
+	}
+
 	var apiErr *client.APIError
 	if errors.As(err, &apiErr) {
 		switch {
