@@ -55,6 +55,12 @@ VALIDITY_DAYS="${VERIFY_VALIDITY_DAYS:-365}"
 KEY_SIZE="${VERIFY_KEY_SIZE:-4096}"
 SUBJECT_TOKEN_TYPE="${VERIFY_SUBJECT_TOKEN_TYPE:-urn:demo:token-type:user-jwt}"
 
+# All token-exchange sections (6, 8, 9) share VERIFY_LABEL — the label
+# registered in the IBM Verify STS token-exchange policy.  Sections 4/5
+# use a separate -upload label so the cert-get demo doesn't interfere.
+LABEL_UPLOAD="${VERIFY_LABEL}-upload"   # sections 4/5 — manual cert upload demo
+LABEL_RUN="${VERIFY_LABEL}"             # sections 6, 8, 9 — token exchange
+
 # ── Build binary if not present ────────────────────────────────────────────────
 BIN="./ibmverify"
 if [ ! -f "$BIN" ]; then
@@ -94,14 +100,15 @@ echo ""
 # ══════════════════════════════════════════════════════════════════════════════
 header "3 / 9  — cert delete  (pre-clean)"
 # ══════════════════════════════════════════════════════════════════════════════
-step "Remove any existing signer cert with label '$VERIFY_LABEL'"
-$BIN cert delete \
-  --tenant        "$VERIFY_TENANT" \
-  --client-id     "$VERIFY_CERT_CLIENT_ID" \
-  --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --label         "$VERIFY_LABEL" \
-  && ok "Deleted existing cert" \
-  || note "No existing cert found — skipping"
+step "Remove any leftover demo certs from previous runs"
+for LBL in "$LABEL_UPLOAD" "$LABEL_TOKENGET" "$LABEL_RUN" "$LABEL_CUSTOM"; do
+  $BIN cert delete \
+    --tenant        "$VERIFY_TENANT" \
+    --client-id     "$VERIFY_CERT_CLIENT_ID" \
+    --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
+    --label         "$LBL" >/dev/null 2>&1 \
+    && ok "Deleted existing cert: $LBL" || true
+done
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -114,7 +121,7 @@ openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout "$KEY_FILE" \
   -out    "$CERT_FILE" \
   -days 1 \
-  -subj "/CN=$VERIFY_LABEL/O=Demo/C=US" \
+  -subj "/CN=$LABEL_UPLOAD/O=Demo/C=US" \
   2>/dev/null
 ok "Generated temporary cert: $CERT_FILE"
 
@@ -123,7 +130,7 @@ $BIN cert upload \
   --client-id     "$VERIFY_CERT_CLIENT_ID" \
   --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
   --cert-file     "$CERT_FILE" \
-  --label         "$VERIFY_LABEL"
+  --label         "$LABEL_UPLOAD"
 
 rm -f "$CERT_FILE" "$KEY_FILE"
 echo ""
@@ -136,15 +143,15 @@ $BIN cert get \
   --tenant        "$VERIFY_TENANT" \
   --client-id     "$VERIFY_CERT_CLIENT_ID" \
   --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --label         "$VERIFY_LABEL"
+  --label         "$LABEL_UPLOAD"
 echo ""
 
-# Clean up the uploaded cert so the full flow below can re-upload cleanly
+# Clean up the upload-demo cert — section 6 uses its own label
 $BIN cert delete \
   --tenant        "$VERIFY_TENANT" \
   --client-id     "$VERIFY_CERT_CLIENT_ID" \
   --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
+  --label         "$LABEL_UPLOAD" >/dev/null 2>&1 || true
 
 # ══════════════════════════════════════════════════════════════════════════════
 header "6 / 9  — token get"
@@ -159,7 +166,7 @@ TOKEN=$($BIN token get \
   --cert-manager-client-secret "$VERIFY_CERT_CLIENT_SECRET" \
   --subject                    "$VERIFY_SUBJECT" \
   --issuer                     "$VERIFY_ISSUER" \
-  --label                      "$VERIFY_LABEL" \
+  --label                      "$LABEL_RUN" \
   --jwt-expires-in             "$JWT_EXPIRES_IN" \
   --validity-days              "$VALIDITY_DAYS" \
   --key-size                   "$KEY_SIZE" \
@@ -179,14 +186,8 @@ $BIN token introspect \
   --token         "$TOKEN"
 echo ""
 
-# Clean up before all-in-one run — must delete so run doesn't
-# hit HTTP 400 "label already exists" from the token get step above
-$BIN cert delete \
-  --tenant        "$VERIFY_TENANT" \
-  --client-id     "$VERIFY_CERT_CLIENT_ID" \
-  --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
-sleep 1
+# run (section 8) auto-deletes and re-uploads under LABEL_RUN — no manual
+# cleanup needed here since token get left the cert in place.
 
 # ══════════════════════════════════════════════════════════════════════════════
 header "8 / 9  — run  (default expiration)"
@@ -201,22 +202,21 @@ FULL_TOKEN=$($BIN run \
   --cert-manager-client-secret "$VERIFY_CERT_CLIENT_SECRET" \
   --subject "$VERIFY_SUBJECT" \
   --issuer  "$VERIFY_ISSUER" \
-  --label   "$VERIFY_LABEL")
+  --label   "$LABEL_RUN")
 
 ok "Token captured cleanly from stdout"
 echo ""
 
-# Clean up before custom-expiration run
-$BIN cert delete \
-  --tenant        "$VERIFY_TENANT" \
-  --client-id     "$VERIFY_CERT_CLIENT_ID" \
-  --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
-  --label         "$VERIFY_LABEL" >/dev/null 2>&1 || true
-sleep 1
+# IBM Verify needs time to de-index section 8's cert before section 9
+# deletes and re-uploads under the same label.
+note "Waiting 15s for IBM Verify cert store to settle..."
+sleep 15
 
 # ══════════════════════════════════════════════════════════════════════════════
 header "9 / 9  — run  (custom expiration + cert options)"
 # ══════════════════════════════════════════════════════════════════════════════
+# Section 9 reuses LABEL_RUN — same label registered in the STS policy.
+# run auto-deletes the previous cert before uploading a new one.
 step "Same flow with explicit --jwt-expires-in, --validity-days, --key-size overrides"
 note "--jwt-expires-in  controls how long the signed JWT lives before exchange"
 note "--validity-days   controls the cert's X.509 validity window"
@@ -230,7 +230,7 @@ CUSTOM_TOKEN=$($BIN run \
   --cert-manager-client-secret "$VERIFY_CERT_CLIENT_SECRET" \
   --subject            "$VERIFY_SUBJECT" \
   --issuer             "$VERIFY_ISSUER" \
-  --label              "$VERIFY_LABEL" \
+  --label              "$LABEL_RUN" \
   --jwt-expires-in     "$JWT_EXPIRES_IN" \
   --validity-days      "$VALIDITY_DAYS" \
   --key-size           "$KEY_SIZE" \
@@ -238,6 +238,13 @@ CUSTOM_TOKEN=$($BIN run \
 
 ok "Custom-expiration token captured — first 60 chars: ${CUSTOM_TOKEN:0:60}..."
 echo ""
+
+# Clean up remaining demo certs (run auto-cleaned its own, but clean up token-get label)
+$BIN cert delete \
+  --tenant        "$VERIFY_TENANT" \
+  --client-id     "$VERIFY_CERT_CLIENT_ID" \
+  --client-secret "$VERIFY_CERT_CLIENT_SECRET" \
+  --label         "$LABEL_RUN" >/dev/null 2>&1 || true
 
 # ── Final output ───────────────────────────────────────────────────────────────
 echo -e "${BOLD}══════════════════════════════════════════════════${RESET}"

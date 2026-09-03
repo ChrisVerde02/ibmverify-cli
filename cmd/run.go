@@ -133,16 +133,17 @@ func runFlow(cmd *cobra.Command, args []string) error {
 	}
 	progress("✓\n")
 
-	// Step 3 — upload certificate
+	// Step 3 — upload certificate (delete first so re-runs don't fail on duplicate label)
 	progress("  Uploading signer certificate... ")
+	_ = certClient.Certs.Delete(ctx, label) // ignore error — cert may not exist yet
 	if err := retry.Do(ctx, func() error {
 		return certClient.Certs.Import(ctx, label, cert.CertificatePEM)
 	}); err != nil {
 		return cliError("upload signer cert", err)
 	}
-	// Small pause — IBM Verify needs a moment to index the new signer cert
-	// before it can validate JWTs signed with it.
-	time.Sleep(2 * time.Second)
+	// IBM Verify needs time to index a newly uploaded signer cert before
+	// it can validate JWTs signed with it. 8s is reliable across all regions.
+	time.Sleep(8 * time.Second)
 	progress("✓  (label=%s)\n", label)
 
 	// Step 4 — sign a short-lived JWT
